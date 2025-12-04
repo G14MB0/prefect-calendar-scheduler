@@ -1,8 +1,7 @@
 import React, { useMemo } from "react";
 import { addDays, format, isSameDay, startOfDay } from "date-fns";
-import classNames from "classnames";
 import { colorForDeployment } from "../../utils/grouping";
-import { formatRange, formatTime } from "../../utils/formatters";
+import { formatTime } from "../../utils/formatters";
 import StatusBadge from "../common/StatusBadge";
 
 const MAX_GROUPS_PER_DAY = 5;
@@ -22,9 +21,19 @@ export default function CalendarWeekView({ groups = [], singleEvents = [], onSel
       }).map(g => {
         // Filter occurrences to only those on this day
         const dayOccurrences = g.occurrences.filter(occ => isSameDay(new Date(occ.startTime), day));
+
+        // Separate scheduled vs executed
+        const scheduledCount = dayOccurrences.filter(occ =>
+          (occ.stateName || "").toLowerCase() === "scheduled" ||
+          (occ.stateName || "").toLowerCase() === "pending"
+        ).length;
+        const executedCount = dayOccurrences.length - scheduledCount;
+
         return {
           ...g,
           occurrences: dayOccurrences,
+          scheduledCount,
+          executedCount,
           start: dayOccurrences[0]?.startTime || g.start,
           end: dayOccurrences[dayOccurrences.length - 1]?.startTime || g.end
         };
@@ -35,21 +44,23 @@ export default function CalendarWeekView({ groups = [], singleEvents = [], onSel
       // Limit groups shown per day
       const visibleGroups = dayGroups.slice(0, MAX_GROUPS_PER_DAY);
       const hiddenGroupsCount = dayGroups.length - visibleGroups.length;
-      const totalEvents = dayGroups.reduce((sum, g) => sum + g.occurrences.length, 0) + daySingles.length;
+      const totalScheduled = dayGroups.reduce((sum, g) => sum + g.scheduledCount, 0);
+      const totalExecuted = dayGroups.reduce((sum, g) => sum + g.executedCount, 0) + daySingles.length;
 
       return {
         day,
         groups: visibleGroups,
         singles: daySingles,
         hiddenGroupsCount,
-        totalEvents
+        totalScheduled,
+        totalExecuted
       };
     });
   }, [days, groups, singleEvents]);
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-      {groupedByDay.map(({ day, groups: dayGroups, singles, hiddenGroupsCount, totalEvents }) => (
+      {groupedByDay.map(({ day, groups: dayGroups, singles, hiddenGroupsCount, totalScheduled, totalExecuted }) => (
         <div
           key={day.toISOString()}
           className="rounded-lg border border-border-primary bg-bg-primary p-3 shadow-sm"
@@ -59,14 +70,19 @@ export default function CalendarWeekView({ groups = [], singleEvents = [], onSel
               <p className="text-xs text-text-tertiary uppercase">{format(day, "EEEE")}</p>
               <p className="text-base font-semibold">{format(day, "dd MMM")}</p>
             </div>
-            <span className="text-xs text-text-tertiary">
-              {totalEvents} esecuzioni
-            </span>
+            <div className="text-right">
+              {totalScheduled > 0 && (
+                <p className="text-xs text-blue-500">{totalScheduled} pianificate</p>
+              )}
+              {totalExecuted > 0 && (
+                <p className="text-xs text-text-tertiary">{totalExecuted} eseguite</p>
+              )}
+            </div>
           </div>
           <div className="flex flex-col gap-2">
             {dayGroups.map((group) => (
               <button
-                key={`${group.deploymentId}-${new Date(group.start).toISOString()}`}
+                key={`${group.deploymentId}-${day.toISOString()}`}
                 onClick={() => onSelect?.(group)}
                 className="w-full rounded-md border border-border-primary px-3 py-2 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-custom"
                 style={{ background: colorForDeployment(group.deploymentId) + "20" }}
@@ -74,10 +90,15 @@ export default function CalendarWeekView({ groups = [], singleEvents = [], onSel
                 <p className="text-sm font-semibold text-text-primary">
                   {group.deploymentName || group.occurrences[0]?.deploymentName || "Deployment"}
                 </p>
-                <p className="text-xs text-text-secondary">
-                  {group.occurrences.length} esecuzioni
-                </p>
-                <div className="mt-1 flex flex-wrap gap-1 text-[11px] text-text-tertiary">
+                <div className="flex items-center gap-2 text-xs text-text-secondary">
+                  {group.scheduledCount > 0 && (
+                    <span className="text-blue-500">{group.scheduledCount} pianificate</span>
+                  )}
+                  {group.executedCount > 0 && (
+                    <span>{group.executedCount} eseguite</span>
+                  )}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
                   {group.occurrences.slice(0, 5).map((ev, idx) => (
                     <StatusBadge key={ev.runId || `${ev.startTime}-${idx}`} state={ev.stateName} />
                   ))}

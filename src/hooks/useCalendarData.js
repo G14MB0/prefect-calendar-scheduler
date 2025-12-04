@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { addDays, subDays } from "date-fns";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchDeploymentRuns, fetchDeployments, fetchDeploymentSchedule } from "../api/resources";
+import { fetchDeploymentRuns, fetchDeployments, fetchDeploymentSchedule, fetchScheduledRuns } from "../api/resources";
 import { useConnection } from "../context/ConnectionContext";
 import { groupEvents, normalizeEvents } from "../utils/grouping";
 import { getUiBaseUrl } from "../api/httpClient";
@@ -52,18 +52,57 @@ export function useCalendarData({ windowDays = 30, pastDays = 7 } = {}) {
     enabled: deployments.length > 0,
     staleTime: 1000 * 60,
     queryFn: async () => {
-      const responses = await Promise.all(
-        deployments.map((d) =>
-          fetchDeploymentRuns(d.id, {
-            start_time_after: windowStart,
-            start_time_before: windowEnd
-          }).then((runs) => ({
-            deploymentId: d.id,
-            runs
-          }))
-        )
-      );
-      return responses;
+      const deploymentIds = deployments.map((d) => d.id);
+
+      // Fetch both past/current runs AND scheduled future runs
+      const [flowRunsResponses, scheduledRuns] = await Promise.all([
+        // Get flow runs (includes past and some scheduled)
+        Promise.all(
+          deployments.map((d) =>
+            fetchDeploymentRuns(d.id, {
+              start_time_after: windowStart,
+              start_time_before: windowEnd
+            }).then((runs) => ({
+              deploymentId: d.id,
+              runs
+            }))
+          )
+        ),
+        // Get scheduled runs specifically
+        fetchScheduledRuns(deploymentIds, windowEnd).catch(() => [])
+      ]);
+
+      // Merge scheduled runs into the responses
+      // Create a map to avoid duplicates by run ID
+      const runsById = new Map();
+
+      // Add flow runs
+      flowRunsResponses.forEach((r) => {
+        const runs = Array.isArray(r.runs) ? r.runs : r.runs?.items || [];
+        runs.forEach((run) => {
+          if (run.id) runsById.set(run.id, run);
+        });
+      });
+
+      // Add scheduled runs (may overlap with flow runs)
+      (scheduledRuns || []).forEach((run) => {
+        if (run.id && !runsById.has(run.id)) {
+          runsById.set(run.id, run);
+        }
+      });
+
+      // Group by deployment
+      const byDeployment = {};
+      runsById.forEach((run) => {
+        const depId = run.deployment_id;
+        if (!byDeployment[depId]) byDeployment[depId] = [];
+        byDeployment[depId].push(run);
+      });
+
+      return Object.entries(byDeployment).map(([deploymentId, runs]) => ({
+        deploymentId,
+        runs
+      }));
     }
   });
 
@@ -88,10 +127,9 @@ export function useCalendarData({ windowDays = 30, pastDays = 7 } = {}) {
 
   const calendarData = useMemo(() => {
     if (!runsQuery.data) return { groups: [], singleEvents: [] };
+    // runsQuery.data is an array of { deploymentId, runs } where runs is already a flat array
     const allRuns = runsQuery.data.flatMap((r) => {
-      if (Array.isArray(r.runs)) return r.runs;
-      if (r.runs?.items && Array.isArray(r.runs.items)) return r.runs.items;
-      return [];
+      return Array.isArray(r.runs) ? r.runs : [];
     });
     const events = normalizeEvents(allRuns, deploymentsById, schedulesById, uiBaseUrl);
     return groupEvents(events);

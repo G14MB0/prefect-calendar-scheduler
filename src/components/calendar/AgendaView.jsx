@@ -7,98 +7,102 @@ export default function AgendaView({ day = new Date(), groups = [], singleEvents
   const normalizedDay = startOfDay(day);
   const hours = useMemo(() => Array.from({ length: 24 }).map((_, idx) => addHours(normalizedDay, idx)), [normalizedDay]);
 
-  const eventsForDay = useMemo(() => {
+  // Get only SCHEDULED events for this day (not executed ones)
+  const scheduledEventsForDay = useMemo(() => {
     const isSame = (date) => isSameDay(new Date(date), normalizedDay);
-    const g = groups.filter((group) => isSame(group.start));
-    const s = singleEvents.filter((event) => isSame(event.startTime));
-    return [...g.map((item) => ({ type: "group", data: item })), ...s.map((item) => ({ type: "single", data: item }))];
+    const isScheduled = (stateName) => {
+      const state = (stateName || "").toLowerCase();
+      return state === "scheduled" || state === "pending";
+    };
+
+    // Extract all individual scheduled occurrences from groups
+    const scheduledFromGroups = groups.flatMap((group) => {
+      return (group.occurrences || [])
+        .filter((occ) => isSame(occ.startTime) && isScheduled(occ.stateName))
+        .map((occ) => ({
+          ...occ,
+          deploymentId: group.deploymentId,
+          deploymentName: occ.deploymentName || group.deploymentName
+        }));
+    });
+
+    // Filter scheduled single events
+    const scheduledSingles = singleEvents.filter(
+      (event) => isSame(event.startTime) && isScheduled(event.stateName)
+    );
+
+    // Combine and sort by time
+    return [...scheduledFromGroups, ...scheduledSingles].sort(
+      (a, b) => new Date(a.startTime) - new Date(b.startTime)
+    );
   }, [groups, singleEvents, normalizedDay]);
 
   const eventsByHour = useMemo(() => {
     const map = {};
-    eventsForDay.forEach((item) => {
-      const start = new Date(item.type === "group" ? item.data.start : item.data.startTime);
-      const key = format(start, "HH:00");
+    scheduledEventsForDay.forEach((event) => {
+      const key = format(new Date(event.startTime), "HH:00");
       if (!map[key]) map[key] = [];
-      map[key].push(item);
+      map[key].push(event);
     });
     return map;
-  }, [eventsForDay]);
+  }, [scheduledEventsForDay]);
 
   return (
     <div className="rounded-lg border border-border-primary bg-bg-primary p-4 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase text-text-tertiary">Agenda</p>
+          <p className="text-xs uppercase text-text-tertiary">Agenda - Esecuzioni Pianificate</p>
           <p className="text-base font-semibold text-text-primary">{format(normalizedDay, "EEEE dd MMM")}</p>
         </div>
+        <span className="text-xs text-text-tertiary">
+          {scheduledEventsForDay.length} esecuzioni pianificate
+        </span>
       </div>
 
       <div className="grid grid-cols-[80px,1fr] gap-x-3 gap-y-2">
         {hours.map((hour) => {
           const label = format(hour, "HH:00");
-          const items = eventsByHour[label] || [];
+          const events = eventsByHour[label] || [];
           return (
             <React.Fragment key={label}>
               <div className="text-xs text-text-tertiary">{label}</div>
               <div className="flex flex-col gap-2">
-                {items.length === 0 ? (
+                {events.length === 0 ? (
                   <div className="h-8 rounded-md border border-dashed border-border-primary px-3 py-2 text-xs text-text-tertiary">
-                    Libero
+                    —
                   </div>
                 ) : (
-                  items.map((item, idx) => {
-                    if (item.type === "group") {
-                      const g = item.data;
-                      return (
-                        <button
-                          key={`${label}-${idx}`}
-                          onClick={() => onSelect?.(g)}
-                          style={{ background: colorForDeployment(g.deploymentId) + "20" }}
-                          className="flex flex-col rounded-md border border-border-primary px-3 py-2 text-left"
-                        >
+                  events.map((event, idx) => (
+                    <button
+                      key={event.runId || `${event.startTime}-${idx}`}
+                      onClick={() => onSelect?.(event)}
+                      style={{ background: colorForDeployment(event.deploymentId) + "20" }}
+                      className="flex items-center justify-between rounded-md border border-border-primary px-3 py-2 text-left hover:shadow-custom transition"
+                    >
+                      <div className="flex flex-col">
                         <span className="text-sm font-semibold text-text-primary">
-                          {g.occurrences[0]?.deploymentName || "Deployment"}
+                          {event.deploymentName}
                         </span>
-                        <span className="text-xs text-text-secondary">
-                          ogni {g.frequency || "?"}s - {g.occurrences.length} occorrenze
+                        <span className="text-xs text-text-tertiary">
+                          {format(new Date(event.startTime), "HH:mm")}
                         </span>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {g.occurrences.slice(0, 3).map((ev) => (
-                            <StatusBadge key={ev.runId || ev.startTime} state={ev.stateName} />
-                          ))}
-                        </div>
-                      </button>
-                    );
-                  }
-                  const e = item.data;
-                  return (
-                      <button
-                        key={`${label}-${idx}`}
-                        onClick={() => onSelect?.(e)}
-                        className="flex flex-col rounded-md border border-dashed border-border-primary px-3 py-2 text-left hover:border-button-primary"
-                      >
-                        <span className="text-sm font-semibold text-text-primary">
-                          {e.deploymentName}
-                        </span>
-                        <div className="flex items-center justify-between text-xs text-text-secondary">
-                          <span>{format(e.startTime, "HH:mm")}</span>
-                          <StatusBadge state={e.stateName} />
-                        </div>
-                        {e.prefectUrl && (
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <StatusBadge state={event.stateName} />
+                        {event.prefectUrl && (
                           <a
-                            href={e.prefectUrl}
+                            href={event.prefectUrl}
                             target="_blank"
                             rel="noreferrer"
                             className="text-xs font-semibold text-button-primary underline"
-                            onClick={(evt) => evt.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            Apri in Prefect UI
+                            Apri
                           </a>
                         )}
-                      </button>
-                    );
-                  })
+                      </div>
+                    </button>
+                  ))
                 )}
               </div>
             </React.Fragment>

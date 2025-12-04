@@ -3,19 +3,20 @@ import Card from "../components/common/Card";
 import Spinner from "../components/common/Spinner";
 import Button from "../components/common/Button";
 import CalendarWeekView from "../components/calendar/CalendarWeekView";
+import GroupDetailModal from "../components/calendar/GroupDetailModal";
 import ScheduleEditor from "../components/schedule/ScheduleEditor";
 import { useCalendarData } from "../hooks/useCalendarData";
 
 export default function CalendarPage() {
   const { groups, singleEvents, isLoading, isError, error } = useCalendarData({});
-  const [selected, setSelected] = useState(null);
+  const [selectedGroup, setSelectedGroup] = useState(null);
   const [showNewScheduleModal, setShowNewScheduleModal] = useState(false);
 
   return (
     <div className="flex flex-col gap-4">
       <Card
         title="Calendario settimanale"
-        description="Blocchi raggruppati per schedule, con frequenze periodiche rappresentate come segmenti continui."
+        description="Blocchi raggruppati per deployment. Clicca su un gruppo per vedere i dettagli."
         action={
           <Button variant="primary" size="sm" onClick={() => setShowNewScheduleModal(true)}>
             + Nuova Schedule
@@ -30,14 +31,14 @@ export default function CalendarPage() {
         )}
         {isError && <p className="text-sm text-text-error">{error?.message}</p>}
         {!isLoading && !isError && (
-          <CalendarWeekView groups={groups} singleEvents={singleEvents} onSelect={setSelected} />
+          <CalendarWeekView groups={groups} singleEvents={singleEvents} onSelect={setSelectedGroup} />
         )}
       </Card>
 
-      {selected && (
-        <ScheduleEditor
-          schedule={selected.scheduleId ? { id: selected.scheduleId } : null}
-          onClose={() => setSelected(null)}
+      {selectedGroup && (
+        <GroupDetailModal
+          group={selectedGroup}
+          onClose={() => setSelectedGroup(null)}
         />
       )}
 

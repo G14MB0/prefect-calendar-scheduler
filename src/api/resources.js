@@ -31,6 +31,7 @@ export async function fetchDeploymentRuns(deploymentId, params = {}) {
   const { start_time_after, start_time_before } = params;
 
   // Build the filter according to Prefect v3 schema
+  // Include all state types to get scheduled runs too
   const filter = {
     flow_runs: {
       deployment_id: {
@@ -48,6 +49,17 @@ export async function fetchDeploymentRuns(deploymentId, params = {}) {
   };
 
   const { data } = await client.post("/flow_runs/filter", filter);
+  return data;
+}
+
+export async function fetchScheduledRuns(deploymentIds, scheduledBefore) {
+  // Prefect v3: POST /deployments/get_scheduled_flow_runs
+  // This returns flow runs that are scheduled but not yet executed
+  const { data } = await client.post("/deployments/get_scheduled_flow_runs", {
+    deployment_ids: deploymentIds,
+    scheduled_before: scheduledBefore,
+    limit: MAX_LIMIT
+  });
   return data;
 }
 
