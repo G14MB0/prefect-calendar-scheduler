@@ -78,6 +78,14 @@ export async function updateSchedule(deploymentId, scheduleId, payload) {
   return data;
 }
 
+export async function toggleScheduleActive(deploymentId, scheduleId, active) {
+  // Prefect v3: PATCH /deployments/{id}/schedules/{schedule_id}
+  const { data } = await client.patch(`/deployments/${deploymentId}/schedules/${scheduleId}`, {
+    active
+  });
+  return data;
+}
+
 export async function deleteSchedule(deploymentId, scheduleId) {
   // Prefect v3: DELETE /deployments/{id}/schedules/{schedule_id}
   const { data } = await client.delete(`/deployments/${deploymentId}/schedules/${scheduleId}`);
@@ -146,4 +154,22 @@ function formatDateTimeAsCron(dateTimeStr) {
   const day = date.getDate();
   const month = date.getMonth() + 1;
   return `${minute} ${hour} ${day} ${month} *`;
+}
+
+export async function runDeploymentNow(deploymentId, parameters = {}) {
+  // Prefect v3: POST /deployments/{id}/create_flow_run
+  const { data } = await client.post(`/deployments/${deploymentId}/create_flow_run`, {
+    parameters,
+    state: {
+      type: "SCHEDULED",
+      message: "Triggered via Calendar Scheduler"
+    }
+  });
+  return data;
+}
+
+export async function fetchDeploymentDetails(deploymentId) {
+  // Get deployment details including parameters schema
+  const { data } = await client.get(`/deployments/${deploymentId}`);
+  return data;
 }

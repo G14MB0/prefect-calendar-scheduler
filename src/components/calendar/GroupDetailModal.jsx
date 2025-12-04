@@ -3,9 +3,11 @@ import { format } from "date-fns";
 import { colorForDeployment } from "../../utils/grouping";
 import StatusBadge from "../common/StatusBadge";
 import Button from "../common/Button";
+import RunDetailModal from "./RunDetailModal";
 
 export default function GroupDetailModal({ group, onClose }) {
     const [sortOrder, setSortOrder] = useState("asc"); // asc = earliest first, desc = latest first
+    const [selectedRun, setSelectedRun] = useState(null);
 
     if (!group) return null;
 
@@ -111,7 +113,8 @@ export default function GroupDetailModal({ group, onClose }) {
                                         {hourOccs.map((occ, idx) => (
                                             <div
                                                 key={occ.runId || `${occ.startTime}-${idx}`}
-                                                className="px-3 py-2 flex items-center justify-between hover:bg-bg-secondary transition"
+                                                className="px-3 py-2 flex items-center justify-between hover:bg-bg-secondary transition cursor-pointer"
+                                                onClick={() => setSelectedRun(occ)}
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <span className="text-xs text-text-tertiary font-mono w-12">
@@ -122,16 +125,9 @@ export default function GroupDetailModal({ group, onClose }) {
                                                         {occ.raw?.name || `Run ${idx + 1}`}
                                                     </span>
                                                 </div>
-                                                {occ.prefectUrl && (
-                                                    <a
-                                                        href={occ.prefectUrl}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="text-xs font-semibold text-button-primary hover:underline"
-                                                    >
-                                                        Apri in Prefect
-                                                    </a>
-                                                )}
+                                                <span className="text-xs text-text-tertiary">
+                                                    Clicca per dettagli →
+                                                </span>
                                             </div>
                                         ))}
                                     </div>
@@ -140,6 +136,14 @@ export default function GroupDetailModal({ group, onClose }) {
                         </div>
                     )}
                 </div>
+
+                {/* Run Detail Modal */}
+                {selectedRun && (
+                    <RunDetailModal
+                        event={selectedRun}
+                        onClose={() => setSelectedRun(null)}
+                    />
+                )}
             </div>
         </div>
     );

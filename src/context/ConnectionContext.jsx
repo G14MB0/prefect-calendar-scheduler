@@ -25,6 +25,14 @@ export function ConnectionProvider({ children }) {
     localStorage.setItem("prefect-calendar-connection", JSON.stringify(settings));
   }, [settings]);
 
+  // Auto-test connection when apiUrl is configured
+  useEffect(() => {
+    if (settings.apiUrl) {
+      testConnection.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.apiUrl]);
+
   const testConnection = useMutation({
     mutationFn: async () => {
       setStatus("checking");

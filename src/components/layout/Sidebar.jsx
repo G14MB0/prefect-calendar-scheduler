@@ -4,7 +4,8 @@ import {
   CalendarDaysIcon,
   ListBulletIcon,
   Cog6ToothIcon,
-  ClockIcon
+  ClockIcon,
+  RectangleStackIcon
 } from "@heroicons/react/24/outline";
 import classNames from "classnames";
 import { useUi } from "../../context/UiContext";
@@ -14,6 +15,7 @@ const links = [
   { to: "/calendar", label: "Calendario", icon: CalendarDaysIcon },
   { to: "/list", label: "Lista", icon: ListBulletIcon },
   { to: "/agenda", label: "Agenda", icon: ClockIcon },
+  { to: "/deployments", label: "Deployment", icon: RectangleStackIcon },
   { to: "/settings", label: "Impostazioni", icon: Cog6ToothIcon }
 ];
 
